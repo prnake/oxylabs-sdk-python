@@ -1,6 +1,9 @@
 import base64
 import logging
-import requests
+import http.client
+import json
+import socket
+import urllib.parse
 import aiohttp
 import asyncio
 from platform import python_version, architecture
@@ -38,8 +41,10 @@ class BaseAPI:
         sdk_type = kwargs.get("sdk_type", f"oxylabs-sdk-python/{__version__} ({python_version()}; {bits})")
         self._headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Basic {api_credentials.encoded_credentials}",
-            "x-oxylabs-sdk": sdk_type,
+            # "Authorization": f"Basic {api_credentials.encoded_credentials}",
+            # "x-oxylabs-sdk": sdk_type,
+            'User-Agent': 'curl/7.68.0',
+            "X-VE-Source": "google_search"
         }
 
 class RealtimeAPI(BaseAPI):
@@ -92,35 +97,49 @@ class RealtimeAPI(BaseAPI):
             error occurs.
         """
         try:
+            # Parse the base URL to get host and path
+            parsed_url = urllib.parse.urlparse(self._base_url)
+            host = parsed_url.netloc
+            path = parsed_url.path or "/"
+            
+            # Determine if we need HTTPS
+            is_https = parsed_url.scheme == "https"
+            
+            # Create the appropriate connection
+            if is_https:
+                conn = http.client.HTTPSConnection(host, timeout=config["request_timeout"])
+            else:
+                conn = http.client.HTTPConnection(host, timeout=config["request_timeout"])
+            
+            # Convert payload to JSON string
+            payload_json = json.dumps(payload)
+            
             if method == "POST":
-                response = requests.post(
-                    self._base_url,
-                    headers=self._headers,
-                    json=payload,
-                    timeout=config["request_timeout"],
-                )
+                conn.request("POST", path, body=payload_json, headers=self._headers)
             else:
                 logger.error(f"Unsupported method: {method}")
                 return None
-
-            response.raise_for_status()
-
-            if response.status_code == 200:
-                return response.json()
+            
+            # Get the response
+            response = conn.getresponse()
+            
+            if response.status == 200:
+                # Read and parse the response body
+                response_body = response.read().decode('utf-8')
+                return json.loads(response_body)
             else:
-                logger.error(f"Error occurred: {response.status_code}")
+                logger.error(f"Error occurred: {response.status}")
                 return None
-
-        except requests.exceptions.Timeout:
+                
+        except socket.timeout:
             logger.error(
                 f"Timeout error. The request to {self._base_url} with method {method} has timed out."
             )
             return None
-        except requests.exceptions.HTTPError as err:
+        except http.client.HTTPException as err:
             logger.error(f"HTTP error occurred: {err}")
-            logger.error(response.text)
             return None
-        except requests.exceptions.RequestException as err:
+        except Exception as err:
             logger.error(f"Error occurred: {err}")
             return None
 

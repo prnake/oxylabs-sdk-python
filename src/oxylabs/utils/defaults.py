@@ -1,7 +1,9 @@
-SYNC_BASE_URL = "https://realtime.oxylabs.io/v1/queries"
-ASYNC_BASE_URL = "https://data.oxylabs.io/v1/queries"
+import os
 
-PROXY_BASE_URL = "realtime.oxylabs.io"
+SYNC_BASE_URL = os.getenv("OXYLABS_SYNC_BASE_URL", "https://realtime.oxylabs.io/v1/queries")
+ASYNC_BASE_URL = os.getenv("OXYLABS_ASYNC_BASE_URL", "https://data.oxylabs.io/v1/queries")
+
+PROXY_BASE_URL = os.getenv("OXYLABS_PROXY_BASE_URL", "realtime.oxylabs.io")
 PROXY_PORT = 60000
 NON_UNIVERSAL_DOMAINS = {"google", "bing", "amazon", "wayfair"}
 
